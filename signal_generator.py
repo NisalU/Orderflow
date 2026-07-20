@@ -1,23 +1,19 @@
 """
-Signal Generator — Combines trend, S/R, and footprint into actionable entry signals.
+Signal Generator — Multi-Timeframe Order Flow Strategy
+=======================================================
+Implements the top-down trading methodology:
 
-BUY when ALL of:
-  ✓ Bullish trend (EMA20 > EMA50, price > EMA20)
-  ✓ Price breaks above nearest resistance
-  ✓ Positive delta exceeds DELTA_THRESHOLD
-  ✓ At least MIN_STACKED_IMBALANCES stacked BUY imbalances
-  ✓ No sell absorption on last candle
-  ✓ Candle closes bullish
-  ✓ Volume above 20-candle average × VOLUME_MULTIPLIER
+  Daily  → Find Trend            (Layer 1)
+  4H     → Find Support/Resistance (Layer 2)
+  1H     → Detect Pattern          (Layer 3)
+  Footprint → Confirm buyers/sellers (Layer 4)
+  Enter trade
+  Stop: Swing high/low
+  Target: 2R (TP1) — 3R (TP2)
 
-SELL when ALL of:
-  ✓ Bearish trend
-  ✓ Price breaks below nearest support
-  ✓ Negative delta magnitude exceeds DELTA_THRESHOLD
-  ✓ At least MIN_STACKED_IMBALANCES stacked SELL imbalances
-  ✓ No buy absorption on last candle
-  ✓ Candle closes bearish
-  ✓ Volume above average
+When MTF_ENABLED=True, all four layers must score ≥ MTF_MIN_CONFLUENCE
+for a valid signal. When False, falls back to the legacy single-timeframe
+logic (trend + S/R + footprint on the active interval).
 """
 from __future__ import annotations
 
@@ -76,7 +72,7 @@ def _spread_ok(ticker: Optional[dict]) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Core signal evaluation
+# MTF-aware signal evaluation
 # ─────────────────────────────────────────────────────────────────────────────
 
 def evaluate(
@@ -84,9 +80,14 @@ def evaluate(
     interval: str,
     candles:  List[dict],
     ticker:   Optional[dict] = None,
+    mtf_data: Optional[dict] = None,   # pre-fetched MTF result (avoids re-fetch)
 ) -> dict:
     """
     Run all signal filters and return a signal dict.
+
+    When mtf_data is provided (fetched by server's background loop),
+    the MTF confluence score is incorporated. Otherwise, falls back
+    to the single-timeframe evaluation.
 
     Returns
     -------
@@ -95,6 +96,7 @@ def evaluate(
       "trend":     <trend dict>
       "sr":        <S/R dict>
       "footprint": <snapshot dict>
+      "mtf":       <MTF confluence dict>  (new)
       "reasons":   list of strings (all conditions checked)
       "passed":    list of passed conditions
       "failed":    list of failed conditions
@@ -103,16 +105,17 @@ def evaluate(
     """
     now = int(time.time())
     result = {
-        "signal":  "NONE",
-        "symbol":  symbol,
+        "signal":   "NONE",
+        "symbol":   symbol,
         "interval": interval,
-        "time":    now,
-        "trend":   {},
-        "sr":      {},
+        "time":     now,
+        "trend":    {},
+        "sr":       {},
         "footprint": {},
-        "reasons": [],
-        "passed":  [],
-        "failed":  [],
+        "mtf":      {},
+        "reasons":  [],
+        "passed":   [],
+        "failed":   [],
     }
 
     if len(candles) < config.EMA_SLOW_PERIOD:
@@ -128,7 +131,7 @@ def evaluate(
         "price":      trend["price"],
     }
 
-    # ── 2. S/R Levels ─────────────────────────────────────────────────────
+    # ── 2. S/R Levels (on active interval) ────────────────────────────────
     sr_data = sr.detect_levels(candles)
     result["sr"] = {
         "nearest_support":    sr_data["nearest_support"],
@@ -140,13 +143,10 @@ def evaluate(
     fp = footprint_engine.get_signal_snapshot(symbol, interval)
     result["footprint"] = fp
 
-    # Use last closed candle's footprint for signal decisions
     fp_closed = fp.get("last_closed", {})
-    fp_cur    = fp.get("current", {})
-
-    last_candle = candles[-1]
-    avg_vol     = _avg_volume(candles, config.VOLUME_MA_PERIOD)
-    candle_vol  = last_candle["volume"]
+    last_candle    = candles[-1]
+    avg_vol        = _avg_volume(candles, config.VOLUME_MA_PERIOD)
+    candle_vol     = last_candle["volume"]
     candle_bullish = last_candle["close"] > last_candle["open"]
     candle_bearish = last_candle["close"] < last_candle["open"]
 
@@ -164,7 +164,32 @@ def evaluate(
     session_ok = _in_trading_session()
     spread_ok  = _spread_ok(ticker)
 
-    # ── 5. Evaluate BUY conditions ────────────────────────────────────────
+    # ── 5. MTF Confluence ─────────────────────────────────────────────────
+    mtf_buy_ok  = True
+    mtf_sell_ok = True
+    mtf_confluence = {}
+
+    if config.MTF_ENABLED and mtf_data:
+        from multi_timeframe import mtf_confluence as _conf
+        daily   = mtf_data.get("daily", {})
+        sr_4h   = mtf_data.get("4h_sr", {})
+        pat_1h  = mtf_data.get("1h_pattern", {})
+
+        conf_buy  = _conf(daily, sr_4h, pat_1h, fp, "BUY")
+        conf_sell = _conf(daily, sr_4h, pat_1h, fp, "SELL")
+
+        mtf_confluence = {
+            "buy":  conf_buy,
+            "sell": conf_sell,
+            "bias": mtf_data.get("bias", "NEUTRAL"),
+        }
+
+        mtf_buy_ok  = conf_buy["score"]  >= config.MTF_MIN_CONFLUENCE
+        mtf_sell_ok = conf_sell["score"] >= config.MTF_MIN_CONFLUENCE
+
+    result["mtf"] = mtf_confluence
+
+    # ── 6. Evaluate BUY conditions ────────────────────────────────────────
     buy_checks = {
         "session_ok":          session_ok,
         "spread_ok":           spread_ok,
@@ -178,28 +203,32 @@ def evaluate(
         "candle_bullish":      candle_bullish,
         "volume_above_avg":    avg_vol > 0 and candle_vol >= avg_vol * config.VOLUME_MULTIPLIER,
     }
+    if config.MTF_ENABLED and mtf_data:
+        buy_checks["mtf_confluence"] = mtf_buy_ok
 
-    # ── 6. Evaluate SELL conditions ───────────────────────────────────────
+    # ── 7. Evaluate SELL conditions ───────────────────────────────────────
     sell_checks = {
         "session_ok":          session_ok,
         "spread_ok":           spread_ok,
         "trend_bearish":       trend["trend"] == "BEARISH",
         "breaks_support":      (sr_data["nearest_support"] is not None
                                 and sr.is_breakout_below(last_candle["close"],
-                                                         sr_data["nearest_support"])),
+                                                          sr_data["nearest_support"])),
         "delta_negative":      fp_delta <= -config.DELTA_THRESHOLD,
         "stacked_sell_imb":    stacked_sell >= config.MIN_STACKED_IMBALANCES,
         "no_buy_absorption":   not buy_absorb,
         "candle_bearish":      candle_bearish,
         "volume_above_avg":    avg_vol > 0 and candle_vol >= avg_vol * config.VOLUME_MULTIPLIER,
     }
+    if config.MTF_ENABLED and mtf_data:
+        sell_checks["mtf_confluence"] = mtf_sell_ok
 
     buy_passed  = [k for k, v in buy_checks.items()  if v]
     buy_failed  = [k for k, v in buy_checks.items()  if not v]
     sell_passed = [k for k, v in sell_checks.items() if v]
     sell_failed = [k for k, v in sell_checks.items() if not v]
 
-    # ── 7. Signal decision ────────────────────────────────────────────────
+    # ── 8. Signal decision ────────────────────────────────────────────────
     if len(buy_failed) == 0:
         result["signal"]  = "BUY"
         result["passed"]  = buy_passed
@@ -229,7 +258,7 @@ def evaluate(
                 [f"✗ {k}" for k in sell_failed]
             )
 
-    # ── 8. Attach analytics ───────────────────────────────────────────────
+    # ── 9. Attach analytics ───────────────────────────────────────────────
     result["analytics"] = {
         "delta":        round(fp_delta, 2),
         "stacked_buy":  stacked_buy,

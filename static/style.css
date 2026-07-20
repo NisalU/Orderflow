@@ -64,6 +64,70 @@ body::before {
   background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.6) 100%);
 }
 
+/* ── MTF Confluence Panel ── */
+.mtf-layer {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.mtf-icon {
+  font-size: 14px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  transition: color 0.3s;
+}
+.mtf-icon.pass { color: var(--buy); }
+.mtf-icon.fail { color: var(--sell); }
+.mtf-info {
+  flex: 1;
+  min-width: 0;
+}
+.mtf-label {
+  color: var(--text-dim);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.mtf-val {
+  color: var(--text);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mtf-status {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.mtf-status.pass { color: var(--buy); }
+.mtf-status.fail { color: var(--sell); }
+.mtf-status.neutral { color: var(--text-dim); }
+.mtf-bar-wrap {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px 6px;
+}
+.mtf-bar-bg {
+  flex: 1;
+  height: 4px;
+  background: var(--bg3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.mtf-bar-fill {
+  height: 100%;
+  background: var(--buy);
+  border-radius: 2px;
+  transition: width 0.4s ease, background 0.3s;
+}
+.mtf-bar-fill.warn { background: var(--warn); }
+.mtf-bar-fill.fail { background: var(--sell); }
+
 /* ════════════════════════════════════════════════════════════════
    TOP BAR
    ════════════════════════════════════════════════════════════════ */

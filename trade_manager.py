@@ -2,7 +2,7 @@
 Trade Manager — Manages open positions with:
   - Break-even stop movement
   - Trailing stop
-  - Partial profit taking
+  - Partial profit taking (50% at TP1=2R, remainder at TP2=3R)
   - Early exit on opposite footprint signal
   - Position state persistence (JSON)
 """
@@ -30,8 +30,8 @@ class Position:
     direction:       str        # "BUY" | "SELL"
     entry_price:     float
     stop_loss:       float
-    take_profit:     float
-    tp2:             float
+    take_profit:     float      # TP1 — 2R
+    tp2:             float      # TP2 — 3R (runner)
     position_size:   float      # total (base asset)
     remaining_size:  float      # after partial closes
     risk_amount:     float
@@ -51,6 +51,10 @@ class Position:
     delta:           float = 0.0
     stacked_imb:     int   = 0
     volume:          float = 0.0
+    # MTF context — recorded at entry for post-analysis
+    mtf_score:       int   = 0
+    mtf_bias:        str   = ""
+    pattern_1h:      str   = ""
 
     def pnl_at(self, price: float) -> float:
         """Unrealized PnL in USDT at given price."""
@@ -97,6 +101,10 @@ class TradeManager:
             with open(self._POSITIONS_FILE) as f:
                 data = json.load(f)
             for pid, d in data.items():
+                # Forward-compat: fill in new fields added after initial save
+                d.setdefault("mtf_score",  0)
+                d.setdefault("mtf_bias",   "")
+                d.setdefault("pattern_1h", "")
                 self._positions[pid] = Position(**d)
         except Exception:
             pass
@@ -112,14 +120,27 @@ class TradeManager:
 
             self._counter += 1
             pid = f"T{int(time.time())}_{self._counter}"
+
+            # Extract MTF context from signal
+            mtf      = signal.get("mtf", {})
+            dir_key  = signal.get("signal", "BUY").lower()
+            mtf_dir  = mtf.get(dir_key, {}) if isinstance(mtf.get(dir_key), dict) else {}
+            pat_1h   = ""
+            pat_data = signal.get("mtf", {})
+            if isinstance(pat_data, dict):
+                p1h = pat_data.get("1h_pattern", {})
+                if isinstance(p1h, dict):
+                    pats = p1h.get("bullish_patterns", []) + p1h.get("bearish_patterns", [])
+                    pat_1h = ", ".join(pats[:2]) if pats else ""
+
             pos = Position(
                 id             = pid,
                 symbol         = params.symbol,
                 direction      = params.direction,
                 entry_price    = params.entry_price,
                 stop_loss      = params.stop_loss,
-                take_profit    = params.take_profit,
-                tp2            = params.tp2,
+                take_profit    = params.take_profit,   # 2R
+                tp2            = params.tp2,            # 3R
                 position_size  = params.position_size,
                 remaining_size = params.position_size,
                 risk_amount    = params.risk_amount,
@@ -134,11 +155,18 @@ class TradeManager:
                     signal.get("analytics", {}).get("stacked_sell", 0),
                 ),
                 volume         = signal.get("analytics", {}).get("candle_volume", 0),
+                mtf_score      = mtf_dir.get("score", 0),
+                mtf_bias       = signal.get("mtf", {}).get("bias", ""),
+                pattern_1h     = pat_1h,
             )
             self._positions[pid] = pos
             daily_risk.record_trade_open()
             self._save()
-            print(f"[trade_manager] Opened {pos.direction} {pos.symbol} @ {pos.entry_price} SL={pos.stop_loss} TP={pos.take_profit}")
+            print(
+                f"[trade_manager] Opened {pos.direction} {pos.symbol} @ {pos.entry_price} "
+                f"SL={pos.stop_loss} TP1={pos.take_profit} TP2={pos.tp2} "
+                f"MTF={pos.mtf_score}/4 {pos.mtf_bias}"
+            )
             return pos
 
     # ── Update / Manage Open Positions ────────────────────────────────────────
@@ -174,7 +202,7 @@ class TradeManager:
         if sl_hit:
             return self._close_position(pos, price, "stop_loss")
 
-        # ── TP1 → partial profit + move to break-even ─────────────────────
+        # ── TP1 (2R) → partial profit + move to break-even ────────────────
         tp1_hit = (direction == "BUY"  and price >= pos.take_profit) or \
                   (direction == "SELL" and price <= pos.take_profit)
         if tp1_hit and not pos.partial_taken:
@@ -185,24 +213,33 @@ class TradeManager:
             pos.partial_taken   = True
             pos.status          = "PARTIAL"
             daily_risk.record_pnl(pnl)
-            events.append({"type": "partial_close", "id": pos.id, "price": price, "pnl": pnl})
+            events.append({
+                "type": "partial_close", "id": pos.id, "price": price,
+                "pnl": pnl, "r_level": "2R",
+                "msg": f"TP1 (2R) hit — 50% closed, runner to 3R",
+            })
 
-        # ── Break-even ────────────────────────────────────────────────────
+        # ── Break-even after TP1 ──────────────────────────────────────────
         if pos.partial_taken and not pos.breakeven_moved:
             be_trigger_r = config.BREAKEVEN_TRIGGER_R
             risk = abs(pos.entry_price - pos.stop_loss) * pos.position_size
             if risk > 0 and pos.pnl_at(price) >= risk * be_trigger_r:
                 pos.stop_loss      = pos.entry_price
                 pos.breakeven_moved = True
-                events.append({"type": "breakeven", "id": pos.id, "new_sl": pos.entry_price})
+                events.append({
+                    "type": "breakeven", "id": pos.id, "new_sl": pos.entry_price,
+                    "msg": "Stop moved to break-even",
+                })
 
-        # ── Trailing Stop ─────────────────────────────────────────────────
+        # ── Trailing Stop (activates at 1.5R) ─────────────────────────────
         trail_r = config.TRAILING_STOP_R
         risk = abs(pos.entry_price - pos.stop_loss) * pos.position_size
         if risk > 0 and pos.pnl_at(price) >= risk * trail_r and not pos.trailing_active:
             pos.trailing_active = True
             pos.trailing_sl     = self._calc_trailing_sl(pos, price)
-            events.append({"type": "trailing_activated", "id": pos.id, "trail_sl": pos.trailing_sl})
+            events.append({
+                "type": "trailing_activated", "id": pos.id, "trail_sl": pos.trailing_sl,
+            })
         elif pos.trailing_active:
             new_sl = self._calc_trailing_sl(pos, price)
             if direction == "BUY"  and new_sl > pos.trailing_sl:
@@ -210,13 +247,13 @@ class TradeManager:
             elif direction == "SELL" and new_sl < pos.trailing_sl:
                 pos.trailing_sl = new_sl
 
-        # ── TP2 Hit → full close ──────────────────────────────────────────
+        # ── TP2 (3R) → full close of runner ──────────────────────────────
         tp2_hit = (direction == "BUY"  and price >= pos.tp2) or \
                   (direction == "SELL" and price <= pos.tp2)
         if tp2_hit:
-            return self._close_position(pos, price, "take_profit_2")
+            return self._close_position(pos, price, "take_profit_3R")
 
-        # ── Early Exit — opposite footprint ───────────────────────────────
+        # ── Early Exit — opposite footprint signal ────────────────────────
         if fp_signal:
             opposite = self._detect_opposite_signal(pos, fp_signal)
             if opposite:
@@ -239,7 +276,8 @@ class TradeManager:
 
     def _detect_opposite_signal(self, pos: Position, fp_signal: dict) -> bool:
         """Trigger early exit if footprint flips strongly against open position."""
-        stacked_buy  = fp_signal.get("last_closed", {}).get("max_stacked_sell", 0)
+        # BUG FIX: was reading max_stacked_sell for BOTH variables
+        stacked_buy  = fp_signal.get("last_closed", {}).get("max_stacked_buy",  0)  # fixed
         stacked_sell = fp_signal.get("last_closed", {}).get("max_stacked_sell", 0)
         thresh = config.MIN_STACKED_IMBALANCES
         if pos.direction == "BUY"  and stacked_sell >= thresh:

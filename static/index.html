@@ -75,6 +75,52 @@
       <div class="metric-row"><span class="label">EMA20</span><span class="value" id="ema-fast">—</span></div>
       <div class="metric-row"><span class="label">EMA50</span><span class="value" id="ema-slow">—</span></div>
 
+      <!-- MTF Analysis Panel -->
+      <div class="panel-hdr" style="margin-top:4px">
+        <span class="label">MTF CONFLUENCE</span>
+        <span class="value" id="mtf-score-badge" style="float:right;font-size:10px">—/4</span>
+      </div>
+      <!-- Layer 1: Daily Trend -->
+      <div class="mtf-layer" id="mtf-l1">
+        <div class="mtf-icon" id="mtf-l1-icon">◈</div>
+        <div class="mtf-info">
+          <div class="mtf-label">Daily Trend</div>
+          <div class="mtf-val" id="mtf-l1-val">—</div>
+        </div>
+        <div class="mtf-status" id="mtf-l1-status">—</div>
+      </div>
+      <!-- Layer 2: 4H S/R -->
+      <div class="mtf-layer" id="mtf-l2">
+        <div class="mtf-icon" id="mtf-l2-icon">◈</div>
+        <div class="mtf-info">
+          <div class="mtf-label">4H Support/Resistance</div>
+          <div class="mtf-val" id="mtf-l2-val">—</div>
+        </div>
+        <div class="mtf-status" id="mtf-l2-status">—</div>
+      </div>
+      <!-- Layer 3: 1H Pattern -->
+      <div class="mtf-layer" id="mtf-l3">
+        <div class="mtf-icon" id="mtf-l3-icon">◈</div>
+        <div class="mtf-info">
+          <div class="mtf-label">1H Pattern</div>
+          <div class="mtf-val" id="mtf-l3-val">—</div>
+        </div>
+        <div class="mtf-status" id="mtf-l3-status">—</div>
+      </div>
+      <!-- Layer 4: Footprint -->
+      <div class="mtf-layer" id="mtf-l4">
+        <div class="mtf-icon" id="mtf-l4-icon">◈</div>
+        <div class="mtf-info">
+          <div class="mtf-label">Footprint Delta</div>
+          <div class="mtf-val" id="mtf-l4-val">—</div>
+        </div>
+        <div class="mtf-status" id="mtf-l4-status">—</div>
+      </div>
+      <div class="mtf-bar-wrap">
+        <div class="mtf-bar-bg"><div class="mtf-bar-fill" id="mtf-bar-fill"></div></div>
+        <span id="mtf-bias-label" style="font-size:10px;color:var(--text-dim);margin-left:6px">—</span>
+      </div>
+
       <div class="panel-hdr" style="margin-top:4px"><span class="label">ORDER FLOW</span></div>
       <div class="delta-bar-wrap">
         <span style="font-size:9px;color:var(--text-dim)">S</span>

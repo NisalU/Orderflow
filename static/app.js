@@ -22,6 +22,7 @@ const S = {
   lastSnapshot: null,
   fpData:       [],
   deltaData:    [],
+  mtfData:      {},
   btEquityChart: null,
   btEquitySeries: null,
   _lastSig:     '',
@@ -304,6 +305,88 @@ function updatePositions(positions) {
       <div class="metric-row" style="padding:3px 0"><span class="label">Size</span><span class="value">${p.remaining_size}</span></div>
     </div>`;
   }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MTF Confluence Panel
+// ─────────────────────────────────────────────────────────────────────────────
+function updateMTFPanel(mtf, signal) {
+  if (!mtf) return;
+
+  const daily   = mtf.daily       || {};
+  const sr4h    = mtf['4h_sr']    || {};
+  const pat1h   = mtf['1h_pattern'] || {};
+  const bias    = mtf.bias        || 'NEUTRAL';
+  const sigDir  = (signal && signal.signal !== 'NONE') ? signal.signal : null;
+  const dir     = sigDir || (bias === 'BULLISH' ? 'BUY' : bias === 'BEARISH' ? 'SELL' : null);
+
+  // Get confluence checks from signal's mtf object if present
+  const mtfConf  = signal && signal.mtf || {};
+  const confDir  = dir === 'BUY' ? mtfConf.buy : mtfConf.sell;
+  const checks   = confDir ? confDir.checks : {};
+  const score    = confDir ? confDir.score : 0;
+  const maxScore = 4;
+
+  // Layer 1 — Daily Trend
+  const l1pass = checks.daily_trend !== undefined ? checks.daily_trend
+    : daily.trend === 'BULLISH' || daily.trend === 'BEARISH';
+  _mtfLayer(1, l1pass,
+    `EMA ${daily.ema_fast_last ? fmtPrice(daily.ema_fast_last) : '—'}`,
+    daily.trend || '—');
+
+  // Layer 2 — 4H S/R
+  const l2pass = checks['4h_near_level'] !== undefined ? checks['4h_near_level']
+    : sr4h.near_level;
+  const nearR = sr4h.nearest_resistance ? fmtPrice(sr4h.nearest_resistance) : '—';
+  const nearS = sr4h.nearest_support    ? fmtPrice(sr4h.nearest_support)    : '—';
+  _mtfLayer(2, !!l2pass,
+    `R: ${nearR} / S: ${nearS}`,
+    l2pass ? 'NEAR LEVEL' : 'NO LEVEL');
+
+  // Layer 3 — 1H Pattern
+  const l3pass = checks['1h_pattern'] !== undefined ? checks['1h_pattern']
+    : (pat1h.bias === 'BULLISH' || pat1h.bias === 'BEARISH');
+  const pats = [...(pat1h.bullish_patterns || []), ...(pat1h.bearish_patterns || [])];
+  _mtfLayer(3, !!l3pass,
+    pats.length ? pats.map(p => p.replace(/_/g,' ')).join(', ') : 'no pattern',
+    pat1h.bias || 'NEUTRAL');
+
+  // Layer 4 — Footprint (from signal analytics)
+  const l4pass = checks.footprint_confirms !== undefined ? checks.footprint_confirms
+    : (signal && signal.analytics && Math.abs(signal.analytics.delta || 0) >= (window._cfg?.delta_threshold || 500));
+  const delta = signal && signal.analytics ? signal.analytics.delta : 0;
+  _mtfLayer(4, !!l4pass,
+    `Δ ${delta >= 0 ? '+' : ''}${fmt(delta)}`,
+    l4pass ? 'CONFIRMED' : 'WEAK');
+
+  // Score badge + bar
+  const scoreNow = [l1pass, l2pass, l3pass, l4pass].filter(Boolean).length;
+  setEl('mtf-score-badge', `${scoreNow}/4`, scoreNow >= 3 ? 'buy' : scoreNow >= 2 ? 'warn' : 'sell');
+
+  const fill = document.getElementById('mtf-bar-fill');
+  if (fill) {
+    fill.style.width = `${(scoreNow / maxScore) * 100}%`;
+    fill.className   = 'mtf-bar-fill ' + (scoreNow >= 3 ? '' : scoreNow >= 2 ? 'warn' : 'fail');
+  }
+
+  const biasEl = document.getElementById('mtf-bias-label');
+  if (biasEl) {
+    biasEl.textContent = bias;
+    biasEl.style.color = bias === 'BULLISH' ? 'var(--buy)'
+      : bias === 'BEARISH' ? 'var(--sell)' : 'var(--text-dim)';
+  }
+}
+
+function _mtfLayer(n, pass, valText, statusText) {
+  const icon   = document.getElementById(`mtf-l${n}-icon`);
+  const val    = document.getElementById(`mtf-l${n}-val`);
+  const status = document.getElementById(`mtf-l${n}-status`);
+  if (!icon || !val || !status) return;
+  icon.className   = `mtf-icon ${pass ? 'pass' : 'fail'}`;
+  icon.textContent = pass ? '✓' : '✗';
+  val.textContent  = valText;
+  status.textContent = statusText;
+  status.className = `mtf-status ${pass ? 'pass' : statusText === 'NEUTRAL' ? 'neutral' : 'fail'}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -744,6 +827,12 @@ function handleWs(msg) {
     case 'pong':
       document.getElementById('latency').textContent = `${Date.now() - S.lastPing}ms`;
       break;
+    case 'mtf_update':
+      if (msg.symbol === S.symbol) {
+        S.mtfData = msg.data || {};
+        updateMTFPanel(S.mtfData, S.lastSnapshot?.signal);
+      }
+      break;
   }
 }
 
@@ -760,6 +849,10 @@ function onSnapshot(state) {
   updateCharts(state);
   updateSidebar(state);
   fetchPositions();
+  // MTF data may be embedded in snapshot
+  if (state.mtf && Object.keys(state.mtf).length) {
+    updateMTFPanel(state.mtf, state.signal);
+  }
   // Update footprint if that tab is visible
   if (state.footprint_history?.length) {
     S.fpData = state.footprint_history;

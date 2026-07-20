@@ -43,6 +43,7 @@ BASE_DIR = Path(__file__).parent
 
 import config
 import data_feed
+import multi_timeframe as mtf_mod
 import signal_generator
 import support_resistance as sr
 import trend_detector as td
@@ -119,6 +120,11 @@ _state_cache: dict = {}
 _state_lock = asyncio.Lock()
 _CACHE_TTL  = 8    # seconds
 
+# MTF cache — updated by background loop (one entry per symbol, refreshes every ~60s)
+_mtf_cache: dict = {}
+_mtf_lock  = asyncio.Lock()
+_MTF_TTL   = 60   # seconds — daily/4h data changes slowly
+
 
 async def _get_state(symbol: str, interval: str) -> dict:
     key = f"{symbol}:{interval}"
@@ -138,9 +144,18 @@ async def _get_state(symbol: str, interval: str) -> dict:
 
     trend_data  = td.detect_trend(candles)
     sr_data     = sr.detect_levels(candles)
-    signal      = signal_generator.evaluate(symbol, interval, candles, ticker)
     fp_history  = footprint_engine.get_history(symbol, interval, limit=100)
     ema_overlay = td.get_ema_overlay(candles)
+
+    # signal is built later (after MTF cache pull)
+
+    # Pull MTF data from cache (refreshed separately by background loop)
+    async with _mtf_lock:
+        mtf_cached = _mtf_cache.get(symbol)
+    mtf_data = mtf_cached.get("data") if mtf_cached else None
+
+    # Re-evaluate signal with MTF data attached
+    signal = signal_generator.evaluate(symbol, interval, candles, ticker, mtf_data=mtf_data)
 
     state = {
         "_ts":       now,
@@ -153,6 +168,7 @@ async def _get_state(symbol: str, interval: str) -> dict:
         "signal":    signal,
         "footprint_history": fp_history,
         "ema":       ema_overlay,
+        "mtf":       mtf_data or {},
         "candles":   [
             {"time": c["time"], "open": c["open"], "high": c["high"],
              "low": c["low"],  "close": c["close"], "volume": c["volume"]}
@@ -415,6 +431,22 @@ async def api_signals(req: web.Request) -> web.Response:
     return web.json_response({"signals": trade_logger.get_signals(limit=limit, symbol=symbol)})
 
 
+async def api_mtf(req: web.Request) -> web.Response:
+    """GET /api/mtf?symbol=BTCUSDT — Multi-timeframe analysis snapshot."""
+    symbol = req.query.get("symbol", config.DEFAULT_SYMBOL)
+    async with _mtf_lock:
+        cached = _mtf_cache.get(symbol)
+    if cached and time.time() - cached.get("_ts", 0) < _MTF_TTL:
+        return web.json_response(cached["data"])
+    try:
+        data = await asyncio.to_thread(mtf_mod.run_mtf_analysis, symbol)
+        async with _mtf_lock:
+            _mtf_cache[symbol] = {"data": data, "_ts": time.time()}
+        return web.json_response(data)
+    except Exception as exc:
+        return web.json_response({"error": str(exc)}, status=502)
+
+
 async def api_scanner_get(_req: web.Request) -> web.Response:
     return web.json_response({
         "coins":     scanner.get_hot_coins(),
@@ -626,6 +658,27 @@ async def _push_fp_delta(client: Client, symbol: str, interval: str):
 _trade_stream: BinanceTradeStream = None   # type: ignore
 
 
+async def _refresh_mtf_cache():
+    """Background task: refresh MTF data for all subscribed symbols every 60s."""
+    while True:
+        try:
+            with manager._lock:
+                symbols = list({c.symbol for c in manager.clients})
+            for sym in symbols:
+                try:
+                    data = await asyncio.to_thread(mtf_mod.run_mtf_analysis, sym)
+                    async with _mtf_lock:
+                        _mtf_cache[sym] = {"data": data, "_ts": time.time()}
+                    manager.broadcast({"type": "mtf_update", "symbol": sym, "data": data}, symbol=sym)
+                except Exception:
+                    pass
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            traceback.print_exc()
+        await asyncio.sleep(60)   # daily + 4H data doesn't change fast
+
+
 async def _analysis_loop():
     """Periodic full-state push to all connected clients."""
     while True:
@@ -681,6 +734,7 @@ async def on_startup(app: web.Application):
     await _trade_stream.subscribe(config.PINNED_SYMBOLS[:5], config.DEFAULT_INTERVAL)
 
     app["analysis_task"] = loop.create_task(_analysis_loop())
+    app["mtf_task"] = loop.create_task(_refresh_mtf_cache())
 
     if config.SCANNER_ENABLED:
         scanner.set_broadcaster(_ws_broadcast)
@@ -695,11 +749,12 @@ async def on_startup(app: web.Application):
 async def on_cleanup(app: web.Application):
     if _trade_stream:
         _trade_stream.stop()
-    task = app.get("analysis_task")
-    if task:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+    for task_key in ("analysis_task", "mtf_task"):
+        task = app.get(task_key)
+        if task:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -724,6 +779,7 @@ def make_app() -> web.Application:
     app.router.add_get("/api/stats",              api_stats)
     app.router.add_get("/api/risk-status",        api_risk_status)
     app.router.add_get("/api/signals",            api_signals)
+    app.router.add_get("/api/mtf",               api_mtf)
     app.router.add_get("/api/scanner",            api_scanner_get)
     app.router.add_post("/api/scanner/scan",      api_scanner_trigger)
     app.router.add_get("/api/exchange",           api_exchange)
