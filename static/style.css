@@ -1,0 +1,701 @@
+/* ═══════════════════════════════════════════════════════════════
+   ORDER FLOW BOT — Hacker Terminal Theme
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg:        #050a0e;
+  --bg2:       #0a1218;
+  --bg3:       #0f1c26;
+  --panel:     #091520;
+  --border:    #0d2035;
+  --glow:      #00ff9d;
+  --glow2:     #00d4ff;
+  --buy:       #00ff9d;
+  --sell:      #ff2d55;
+  --neutral:   #4a9eff;
+  --warn:      #ffaa00;
+  --dim:       #1a3a55;
+  --text:      #b0e0ff;
+  --text-dim:  #3a7a9a;
+  --text-bright: #e0f8ff;
+  --font:      'JetBrains Mono', 'Fira Code', monospace;
+  --fs:        13px;
+  --fs-sm:     11px;
+  --fs-lg:     16px;
+  --fs-xl:     22px;
+  --radius:    4px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs);
+  overflow: hidden;
+}
+
+/* ── Scan lines overlay ── */
+body::after {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.10) 2px,
+    rgba(0,0,0,0.10) 4px
+  );
+  animation: scanroll 10s linear infinite;
+}
+@keyframes scanroll {
+  from { background-position: 0 0; }
+  to   { background-position: 0 100vh; }
+}
+
+/* ── Noise/vignette ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 9998;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.6) 100%);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TOP BAR
+   ════════════════════════════════════════════════════════════════ */
+#topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  height: 46px;
+  background: linear-gradient(90deg, #020e18 0%, #041525 50%, #020e18 100%);
+  border-bottom: 1px solid var(--border);
+  position: relative; z-index: 10;
+  flex-shrink: 0;
+}
+
+.brand {
+  display: flex; align-items: center; gap: 10px;
+}
+.brand h1 {
+  font-size: 18px; font-weight: 700; letter-spacing: 4px;
+  color: var(--glow);
+  text-shadow: 0 0 20px var(--glow), 0 0 40px rgba(0,255,157,0.3);
+  animation: pulse-text 3s ease-in-out infinite;
+}
+.brand h1 span { color: var(--glow2); }
+@keyframes pulse-text {
+  0%, 100% { text-shadow: 0 0 20px var(--glow), 0 0 40px rgba(0,255,157,0.3); }
+  50%       { text-shadow: 0 0 30px var(--glow), 0 0 60px rgba(0,255,157,0.5); }
+}
+
+.live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--glow);
+  box-shadow: 0 0 8px var(--glow);
+  animation: blink 1s step-start infinite;
+}
+.live-dot.disconnected { background: var(--sell); box-shadow: 0 0 8px var(--sell); }
+@keyframes blink { 50% { opacity: 0; } }
+
+.topbar-center {
+  display: flex; align-items: center; gap: 12px;
+}
+.topbar-right {
+  display: flex; align-items: center; gap: 10px;
+}
+
+select {
+  background: var(--bg3);
+  color: var(--glow);
+  border: 1px solid var(--dim);
+  padding: 4px 8px;
+  font-family: var(--font);
+  font-size: var(--fs-sm);
+  border-radius: var(--radius);
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+}
+select:focus { border-color: var(--glow); box-shadow: 0 0 8px rgba(0,255,157,0.2); }
+
+.pill {
+  padding: 3px 10px;
+  border: 1px solid var(--dim);
+  border-radius: 20px;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  background: var(--panel);
+}
+.pill.live { color: var(--glow); border-color: rgba(0,255,157,0.3); }
+
+#clock {
+  font-size: var(--fs-sm); color: var(--text-dim); letter-spacing: 1px;
+}
+#latency { font-size: var(--fs-sm); color: var(--text-dim); min-width: 60px; }
+
+/* ════════════════════════════════════════════════════════════════
+   TABS
+   ════════════════════════════════════════════════════════════════ */
+#tabs {
+  display: flex; gap: 0;
+  background: #020e18;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tab-btn {
+  padding: 8px 20px;
+  background: transparent;
+  border: none; border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: color .2s, border-color .2s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active {
+  color: var(--glow);
+  border-bottom-color: var(--glow);
+  text-shadow: 0 0 10px rgba(0,255,157,0.5);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MAIN LAYOUT
+   ════════════════════════════════════════════════════════════════ */
+#main {
+  display: flex; flex-direction: column;
+  height: calc(100vh - 46px - 33px);
+  overflow: hidden;
+}
+
+.tab-panel { display: none; flex: 1; overflow: hidden; }
+.tab-panel.active { display: flex; flex-direction: column; }
+
+/* ═══ DASHBOARD TAB ═══ */
+#tab-dashboard {
+  display: none; flex-direction: row; overflow: hidden;
+}
+#tab-dashboard.active { display: flex; }
+
+/* Left sidebar */
+#sidebar {
+  width: 220px; flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+
+/* Chart area */
+#chart-area {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* Right panel */
+#right-panel {
+  width: 260px; flex-shrink: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   PANELS & CARDS
+   ════════════════════════════════════════════════════════════════ */
+.panel-hdr {
+  padding: 8px 12px 6px;
+  font-size: var(--fs-sm);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.panel-hdr span.label { color: var(--glow); }
+
+.card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 8px;
+  overflow: hidden;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SIGNAL VERDICT
+   ════════════════════════════════════════════════════════════════ */
+#verdict {
+  padding: 10px 12px;
+  margin: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg3);
+  position: relative;
+  overflow: hidden;
+}
+#verdict::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: var(--verdict-bg, transparent);
+  opacity: 0.08;
+  transition: background 0.5s;
+}
+#verdict-dir {
+  font-size: 24px; font-weight: 700; letter-spacing: 6px;
+  color: var(--neutral);
+  text-shadow: 0 0 15px currentColor;
+}
+#verdict-dir.BUY  { color: var(--buy);  --verdict-bg: var(--buy); }
+#verdict-dir.SELL { color: var(--sell); --verdict-bg: var(--sell); }
+
+#price-main { font-size: var(--fs-xl); font-weight: 700; color: var(--text-bright); }
+#price-chg { font-size: var(--fs-sm); margin-left: 8px; }
+.chg-pos { color: var(--buy); }
+.chg-neg { color: var(--sell); }
+
+.conditions-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 3px; margin-top: 6px;
+}
+.cond {
+  font-size: 10px; padding: 2px 5px;
+  border-radius: 2px;
+  display: flex; align-items: center; gap: 4px;
+}
+.cond.pass { color: var(--buy);  background: rgba(0,255,157,0.07); }
+.cond.fail { color: var(--sell); background: rgba(255,45,85,0.07);  }
+.cond::before { font-size: 9px; }
+.cond.pass::before { content: '✓'; }
+.cond.fail::before { content: '✗'; }
+
+/* ════════════════════════════════════════════════════════════════
+   METRICS ROWS
+   ════════════════════════════════════════════════════════════════ */
+.metric-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 12px;
+  border-bottom: 1px solid rgba(13,32,53,0.5);
+  font-size: var(--fs-sm);
+}
+.metric-row .label { color: var(--text-dim); }
+.metric-row .value { color: var(--text-bright); font-weight: 600; }
+.metric-row .value.buy  { color: var(--buy); }
+.metric-row .value.sell { color: var(--sell); }
+.metric-row .value.warn { color: var(--warn); }
+
+/* ════════════════════════════════════════════════════════════════
+   CHART CONTAINERS
+   ════════════════════════════════════════════════════════════════ */
+#candle-chart-wrap {
+  flex: 3; position: relative; overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+#candle-chart { width: 100%; height: 100%; }
+
+#delta-chart-wrap {
+  flex: 1; position: relative; overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+#delta-chart { width: 100%; height: 100%; }
+
+#vol-chart-wrap {
+  flex: 1; position: relative; overflow: hidden;
+}
+#vol-chart { width: 100%; height: 100%; }
+
+/* Chart label overlays */
+.chart-label {
+  position: absolute; top: 6px; left: 10px;
+  font-size: var(--fs-sm); color: var(--text-dim);
+  letter-spacing: 1px; text-transform: uppercase;
+  pointer-events: none; z-index: 5;
+}
+.chart-label span { color: var(--glow); }
+
+/* ════════════════════════════════════════════════════════════════
+   FOOTPRINT TAB
+   ════════════════════════════════════════════════════════════════ */
+#tab-footprint {
+  display: none; flex-direction: row; overflow: hidden;
+}
+#tab-footprint.active { display: flex; }
+
+#fp-canvas-wrap {
+  flex: 1; position: relative; overflow: hidden;
+}
+#fp-canvas { display: block; }
+
+#fp-sidebar {
+  width: 220px; flex-shrink: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+/* Footprint candle block */
+.fp-candle {
+  display: inline-block;
+  margin: 2px;
+  border: 1px solid rgba(13,32,53,0.8);
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.fp-candle:hover { border-color: var(--glow); }
+.fp-level {
+  display: flex; justify-content: space-between;
+  padding: 0 4px;
+  font-size: 9px;
+  line-height: 13px;
+  min-width: 80px;
+}
+.fp-level .buy-v  { color: var(--buy); }
+.fp-level .sell-v { color: var(--sell); }
+.fp-level.im-buy  { background: rgba(0,255,157,0.12); }
+.fp-level.im-sell { background: rgba(255,45,85,0.12); }
+.fp-level.poc     { background: rgba(255,170,0,0.15); }
+
+/* ════════════════════════════════════════════════════════════════
+   SCANNER TAB
+   ════════════════════════════════════════════════════════════════ */
+#tab-scanner {
+  display: none; flex-direction: column; overflow: hidden;
+}
+#tab-scanner.active { display: flex; }
+
+#scanner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px; padding: 12px; overflow-y: auto;
+}
+.scanner-card {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  position: relative; overflow: hidden;
+}
+.scanner-card::before {
+  content: ''; position: absolute; inset: 0;
+  background: var(--card-accent, transparent);
+  opacity: 0.04;
+}
+.scanner-card:hover {
+  border-color: var(--glow);
+  box-shadow: 0 0 12px rgba(0,255,157,0.1);
+}
+.scanner-card .sym {
+  font-size: var(--fs-lg); font-weight: 700; color: var(--text-bright);
+  letter-spacing: 1px;
+}
+.scanner-card .price-s {
+  font-size: var(--fs-sm); color: var(--text);
+}
+.scanner-card .change {
+  font-size: var(--fs-sm); font-weight: 600;
+}
+.scanner-card .score-bar {
+  height: 2px; margin-top: 6px; border-radius: 1px;
+  background: var(--dim);
+}
+.scanner-card .score-fill {
+  height: 100%; border-radius: 1px;
+  background: var(--glow);
+  box-shadow: 0 0 6px rgba(0,255,157,0.5);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   POSITIONS / TRADES TAB
+   ════════════════════════════════════════════════════════════════ */
+#tab-positions {
+  display: none; flex-direction: column; overflow: hidden;
+}
+#tab-positions.active { display: flex; }
+
+.trade-table-wrap { flex: 1; overflow-y: auto; }
+
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+thead th {
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  position: sticky; top: 0; z-index: 2;
+}
+tbody tr {
+  border-bottom: 1px solid rgba(13,32,53,0.5);
+  transition: background 0.1s;
+}
+tbody tr:hover { background: rgba(0,255,157,0.03); }
+tbody td {
+  padding: 7px 10px; color: var(--text);
+}
+.dir-buy  { color: var(--buy);  font-weight: 700; }
+.dir-sell { color: var(--sell); font-weight: 700; }
+.pnl-pos  { color: var(--buy);  }
+.pnl-neg  { color: var(--sell); }
+
+/* Stats bar */
+#stats-bar {
+  display: flex; gap: 2px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.stat-box {
+  flex: 1; min-width: 100px;
+  padding: 6px 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.stat-box .s-label { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; }
+.stat-box .s-val { font-size: 15px; font-weight: 700; color: var(--text-bright); }
+.stat-box .s-val.green { color: var(--buy); }
+.stat-box .s-val.red   { color: var(--sell); }
+
+/* ════════════════════════════════════════════════════════════════
+   BACKTEST TAB
+   ════════════════════════════════════════════════════════════════ */
+#tab-backtest {
+  display: none; flex-direction: row; overflow: hidden;
+}
+#tab-backtest.active { display: flex; }
+
+#bt-controls {
+  width: 240px; flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  overflow-y: auto;
+}
+
+#bt-main {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+
+#bt-results {
+  width: 240px; flex-shrink: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.bt-input-group { display: flex; flex-direction: column; gap: 4px; }
+.bt-input-group label {
+  font-size: var(--fs-sm); color: var(--text-dim); letter-spacing: 1px;
+}
+.bt-input-group input, .bt-input-group select {
+  width: 100%;
+  background: var(--bg3);
+  color: var(--text-bright);
+  border: 1px solid var(--dim);
+  padding: 6px 8px;
+  font-family: var(--font);
+  font-size: var(--fs-sm);
+  border-radius: var(--radius);
+  outline: none;
+}
+.bt-input-group input:focus, .bt-input-group select:focus {
+  border-color: var(--glow);
+}
+
+#bt-run-btn {
+  width: 100%; padding: 10px;
+  background: transparent;
+  border: 1px solid var(--glow);
+  color: var(--glow);
+  font-family: var(--font);
+  font-size: var(--fs-sm);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: background .2s, box-shadow .2s;
+}
+#bt-run-btn:hover {
+  background: rgba(0,255,157,0.1);
+  box-shadow: 0 0 15px rgba(0,255,157,0.2);
+}
+#bt-run-btn:disabled {
+  opacity: 0.4; cursor: default;
+}
+
+#bt-progress-wrap {
+  padding: 0 0 8px;
+}
+#bt-progress-bar-bg {
+  height: 4px; background: var(--dim); border-radius: 2px;
+}
+#bt-progress-bar {
+  height: 100%; width: 0%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--glow), var(--glow2));
+  box-shadow: 0 0 8px var(--glow);
+  transition: width 0.1s;
+}
+#bt-status {
+  font-size: var(--fs-sm); color: var(--text-dim);
+  margin-top: 4px; min-height: 16px;
+}
+
+#bt-log {
+  flex: 1; overflow-y: auto;
+  padding: 8px;
+  font-size: var(--fs-sm);
+}
+.bt-log-entry {
+  padding: 3px 6px;
+  border-left: 2px solid var(--dim);
+  margin-bottom: 3px;
+  animation: slide-in 0.15s ease;
+}
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+.bt-log-entry.entry { border-color: var(--buy); }
+.bt-log-entry.trade-win   { border-color: var(--buy); }
+.bt-log-entry.trade-loss  { border-color: var(--sell); }
+.bt-log-entry.progress    { border-color: var(--dim); color: var(--text-dim); }
+.bt-log-entry.done        { border-color: var(--warn); color: var(--warn); }
+
+#bt-equity-wrap {
+  height: 220px; flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+#bt-equity-chart { width: 100%; height: 100%; }
+
+/* ════════════════════════════════════════════════════════════════
+   S/R LEVELS LIST
+   ════════════════════════════════════════════════════════════════ */
+.sr-level-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  font-size: var(--fs-sm);
+  border-bottom: 1px solid rgba(13,32,53,0.5);
+}
+.sr-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.sr-dot.resist { background: var(--sell); box-shadow: 0 0 4px var(--sell); }
+.sr-dot.support { background: var(--buy); box-shadow: 0 0 4px var(--buy); }
+.sr-price { flex: 1; color: var(--text-bright); }
+.sr-tags { font-size: 9px; color: var(--text-dim); }
+.sr-strength {
+  font-size: 9px; color: var(--warn);
+  padding: 1px 4px; border: 1px solid rgba(255,170,0,0.3);
+  border-radius: 2px;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SCROLLBARS
+   ════════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--glow); }
+
+/* ════════════════════════════════════════════════════════════════
+   SCANNER SCAN BUTTON
+   ════════════════════════════════════════════════════════════════ */
+.btn-sm {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--dim);
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: .2s;
+}
+.btn-sm:hover {
+  border-color: var(--glow);
+  color: var(--glow);
+}
+.btn-sm.scanning {
+  border-color: var(--warn);
+  color: var(--warn);
+  animation: pulse-btn 0.8s ease-in-out infinite;
+}
+@keyframes pulse-btn {
+  0%,100% { opacity:1; } 50% { opacity:0.5; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ANIMATED ENTRY FLASH
+   ════════════════════════════════════════════════════════════════ */
+@keyframes flash-buy {
+  0%   { box-shadow: 0 0 0 0 rgba(0,255,157,0); }
+  50%  { box-shadow: 0 0 30px 8px rgba(0,255,157,0.4); }
+  100% { box-shadow: 0 0 0 0 rgba(0,255,157,0); }
+}
+@keyframes flash-sell {
+  0%   { box-shadow: 0 0 0 0 rgba(255,45,85,0); }
+  50%  { box-shadow: 0 0 30px 8px rgba(255,45,85,0.4); }
+  100% { box-shadow: 0 0 0 0 rgba(255,45,85,0); }
+}
+.signal-flash-buy  { animation: flash-buy  0.8s ease; }
+.signal-flash-sell { animation: flash-sell 0.8s ease; }
+
+/* ════════════════════════════════════════════════════════════════
+   DELTA BAR
+   ════════════════════════════════════════════════════════════════ */
+.delta-bar-wrap {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+}
+.delta-bar-bg {
+  flex: 1; height: 6px;
+  background: var(--dim); border-radius: 3px;
+  position: relative; overflow: hidden;
+}
+.delta-bar-fill {
+  position: absolute; top: 0; height: 100%; border-radius: 3px;
+  transition: width 0.3s, left 0.3s, background 0.3s;
+}
+.delta-val {
+  min-width: 80px; text-align: right;
+  font-size: var(--fs-sm); font-weight: 700;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MISC
+   ════════════════════════════════════════════════════════════════ */
+.tag {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.tag.buy  { background: rgba(0,255,157,0.15); color: var(--buy); }
+.tag.sell { background: rgba(255,45,85,0.15);  color: var(--sell); }
+.tag.neutral { background: rgba(74,158,255,0.15); color: var(--neutral); }
+.tag.warn { background: rgba(255,170,0,0.15); color: var(--warn); }
+
+.sep { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+/* Glowing number update */
+@keyframes num-glow {
+  from { text-shadow: 0 0 8px currentColor; }
+  to   { text-shadow: none; }
+}
+.updated { animation: num-glow 1s ease; }

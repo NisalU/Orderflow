@@ -1,0 +1,4 @@
+aiohttp>=3.9
+aiodns>=3.0
+websockets>=12.0
+requests>=2.31
