@@ -25,6 +25,7 @@ const S = {
   btEquityChart: null,
   btEquitySeries: null,
   _lastSig:     '',
+  _fallbackTimer: null,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,6 +111,7 @@ function updateCharts(state) {
   candleSeries.setData(candles.map(c => ({
     time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
   })));
+  candleChart.timeScale().fitContent();
 
   if (state.ema) {
     emaFastSeries.setData(state.ema.ema_fast || []);
@@ -305,19 +307,34 @@ function updatePositions(positions) {
 // Signal log
 // ─────────────────────────────────────────────────────────────────────────────
 function appendSignalLog(signal) {
-  const log = document.getElementById('signal-log');
-  if (!log) return;
   const ts  = new Date(signal.time * 1000).toLocaleTimeString();
   const sig = signal.signal || 'NONE';
   const cls = sig === 'BUY' ? 'buy' : sig === 'SELL' ? 'sell' : '';
-  const row = document.createElement('div');
-  row.style.cssText = 'padding:4px 10px;border-bottom:1px solid var(--border);font-size:11px';
-  row.innerHTML = `<span style="color:var(--text-dim)">${ts}</span>
+  const html = `<span style="color:var(--text-dim)">${ts}</span>
     <span class="tag ${cls}" style="margin:0 6px">${sig}</span>
     <span style="color:var(--text-dim)">${signal.symbol || S.symbol}</span>
     <span style="color:var(--text-dim);float:right">${(signal.passed||[]).length}/${((signal.passed||[]).length+(signal.failed||[]).length)} pass</span>`;
-  log.prepend(row);
-  while (log.children.length > 50) log.removeChild(log.lastChild);
+  const style = 'padding:4px 10px;border-bottom:1px solid var(--border);font-size:11px';
+
+  // Main signal log (desktop right-panel)
+  const log = document.getElementById('signal-log');
+  if (log) {
+    const row = document.createElement('div');
+    row.style.cssText = style;
+    row.innerHTML = html;
+    log.prepend(row);
+    while (log.children.length > 50) log.removeChild(log.lastChild);
+  }
+
+  // Mirror into the mobile sidebar log
+  const sideLog = document.getElementById('signal-log-sidebar');
+  if (sideLog) {
+    const row2 = document.createElement('div');
+    row2.style.cssText = style;
+    row2.innerHTML = html;
+    sideLog.prepend(row2);
+    while (sideLog.children.length > 30) sideLog.removeChild(sideLog.lastChild);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -728,7 +745,13 @@ function handleWs(msg) {
 }
 
 function onSnapshot(state) {
-  if (!state || state.symbol !== S.symbol) return;
+  // Relax the symbol guard: allow snapshots whose symbol matches what we
+  // *currently* want (S.symbol) even if a race caused them to arrive slightly
+  // out of order.  Only drop messages for a completely different symbol.
+  if (!state) return;
+  if (state.symbol && state.symbol !== S.symbol) return;
+  // Clear any REST fallback timer – the WS snapshot arrived in time
+  if (S._fallbackTimer) { clearTimeout(S._fallbackTimer); S._fallbackTimer = null; }
   S.lastSnapshot = state;
   showLoading(false);
   updateCharts(state);
@@ -753,12 +776,43 @@ function onSnapshot(state) {
 function subscribe() {
   if (!S.ws || S.ws.readyState !== WebSocket.OPEN) return;
   showLoading(true);
+
+  // Clear stale chart data so old-symbol candles don't linger visually
+  try { candleSeries.setData([]);  } catch(e) {}
+  try { emaFastSeries.setData([]); } catch(e) {}
+  try { emaSlowSeries.setData([]); } catch(e) {}
+  try { volSeries.setData([]);     } catch(e) {}
+  try { deltaSeries.setData([]);   } catch(e) {}
+  try { cdSeries.setData([]);      } catch(e) {}
+  srLines.forEach(l => { try { candleSeries.removePriceLine(l); } catch(e){} });
+  srLines = [];
+
   S.ws.send(JSON.stringify({
     type:     'subscribe',
     symbol:   S.symbol,
     interval: S.interval,
   }));
   document.getElementById('fp-sym').textContent = S.symbol;
+
+  // Start a 5-second fallback: if no WS snapshot arrives, poll via REST
+  if (S._fallbackTimer) clearTimeout(S._fallbackTimer);
+  S._fallbackTimer = setTimeout(() => {
+    S._fallbackTimer = null;
+    fetchStateViaRest();
+  }, 5000);
+}
+
+/**
+ * REST fallback — used when a WS snapshot doesn't arrive within 5 seconds
+ * of a subscribe() call (e.g. heavy server load or transient WS hiccup).
+ */
+async function fetchStateViaRest() {
+  try {
+    const r = await fetch(`/api/state?symbol=${encodeURIComponent(S.symbol)}&interval=${encodeURIComponent(S.interval)}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d && d.symbol === S.symbol) onSnapshot(d);
+  } catch(e) {}
 }
 
 function startPing() {
@@ -1080,6 +1134,10 @@ function switchTab(name) {
     p.classList.toggle('active', p.id === `tab-${name}`)
   );
 
+  // Resize charts when coming back to the dashboard tab so they fill the panel
+  if (name === 'dashboard') {
+    setTimeout(resizeCharts, 50);
+  }
   if (name === 'footprint') {
     renderFootprintCanvas();
     const last = S.fpData.slice(-1)[0];
@@ -1218,6 +1276,25 @@ function initEvents() {
 
   // Settings — Signal
   document.getElementById('btn-save-signal')?.addEventListener('click', saveSignalParams);
+
+  // Mobile sidebar — open / close
+  const sidebar        = document.getElementById('sidebar');
+  const overlay        = document.getElementById('sidebar-overlay');
+  const sidebarToggle  = document.getElementById('sidebar-toggle');
+  const sidebarClose   = document.getElementById('sidebar-close');
+
+  function openSidebar() {
+    sidebar?.classList.add('open');
+    overlay?.classList.add('show');
+  }
+  function closeSidebar() {
+    sidebar?.classList.remove('open');
+    overlay?.classList.remove('show');
+  }
+
+  sidebarToggle?.addEventListener('click', openSidebar);
+  sidebarClose?.addEventListener('click', closeSidebar);
+  overlay?.addEventListener('click', closeSidebar);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1225,6 +1302,8 @@ function initEvents() {
 // ─────────────────────────────────────────────────────────────────────────────
 function boot() {
   initCharts();
+  // Give the flex layout a frame to settle before measuring chart dimensions
+  setTimeout(resizeCharts, 150);
   initEvents();
   connect();          // Real-time WebSocket — all data flows through here
   updateClock();

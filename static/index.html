@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
   <title>ORDER FLOW BOT — Professional Trading Terminal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
@@ -14,6 +14,7 @@
 <!-- ═══ TOP BAR ═══════════════════════════════════════════════════════════ -->
 <header id="topbar">
   <div class="brand">
+    <button id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
     <span class="live-dot" id="live-dot"></span>
     <h1>ORDER<span>FLOW</span></h1>
     <span class="tag neutral" id="exchange-tag">SPOT</span>
@@ -44,6 +45,9 @@
   <button class="tab-btn" data-tab="settings">⚙ Settings</button>
 </nav>
 
+<!-- Sidebar overlay (mobile) -->
+<div id="sidebar-overlay"></div>
+
 <!-- ═══ MAIN ═══════════════════════════════════════════════════════════════ -->
 <div id="main">
 
@@ -52,6 +56,9 @@
 
     <!-- Left Sidebar -->
     <aside id="sidebar">
+      <!-- Mobile close button -->
+      <button id="sidebar-close">✕</button>
+
       <div id="verdict">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div id="verdict-dir">NONE</div>
@@ -98,6 +105,10 @@
       <div class="metric-row"><span class="label">Total P&L</span><span class="value" id="stat-pnl">—</span></div>
       <div class="metric-row"><span class="label">Best</span><span class="value" id="stat-best">—</span></div>
       <div class="metric-row"><span class="label">Worst</span><span class="value" id="stat-worst">—</span></div>
+
+      <!-- Signal log duplicated inside sidebar for mobile -->
+      <div class="panel-hdr" style="margin-top:4px"><span class="label">SIGNAL LOG</span></div>
+      <div id="signal-log-sidebar" class="mobile-signal-log"></div>
     </aside>
 
     <!-- Chart area -->
@@ -222,7 +233,7 @@
     </div>
     <div id="bt-main">
       <div id="bt-equity-wrap">
-        <div class="chart-label">EQUITY CURVE</div>
+        <div class="chart-label" style="position:relative;padding:4px 10px">EQUITY CURVE</div>
         <div id="bt-equity-chart"></div>
       </div>
       <div id="bt-log"></div>
@@ -368,7 +379,7 @@
           </div>
           <div style="margin-top:10px">
             <label class="setting-label">Active Sessions</label>
-            <div style="display:flex;gap:10px;margin-top:6px">
+            <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">
               <label class="setting-label" style="display:flex;align-items:center;gap:5px;cursor:pointer">
                 <input type="checkbox" id="sess-london" checked/> London (07–16 UTC)
               </label>
