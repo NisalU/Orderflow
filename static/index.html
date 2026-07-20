@@ -26,6 +26,8 @@
   </div>
 
   <div class="topbar-right">
+    <span class="mode-badge" id="mode-badge" title="Trading mode">SIGNAL</span>
+    <span class="key-status" id="key-status-dot" title="API keys status">⬤</span>
     <span class="pill live" id="tick-pill">— t/s</span>
     <span id="clock" class="pill"></span>
     <span id="latency" class="pill">— ms</span>
@@ -39,6 +41,7 @@
   <button class="tab-btn" data-tab="scanner">⚡ Scanner</button>
   <button class="tab-btn" data-tab="positions">◈ Positions</button>
   <button class="tab-btn" data-tab="backtest">◉ Backtest</button>
+  <button class="tab-btn" data-tab="settings">⚙ Settings</button>
 </nav>
 
 <!-- ═══ MAIN ═══════════════════════════════════════════════════════════════ -->
@@ -49,7 +52,6 @@
 
     <!-- Left Sidebar -->
     <aside id="sidebar">
-      <!-- Signal verdict -->
       <div id="verdict">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div id="verdict-dir">NONE</div>
@@ -61,13 +63,11 @@
         <div id="conditions-list" class="conditions-grid"></div>
       </div>
 
-      <!-- Trend -->
       <div class="panel-hdr"><span class="label">TREND</span></div>
       <div class="metric-row"><span class="label">Direction</span><span class="value" id="trend-dir">—</span></div>
       <div class="metric-row"><span class="label">EMA20</span><span class="value" id="ema-fast">—</span></div>
       <div class="metric-row"><span class="label">EMA50</span><span class="value" id="ema-slow">—</span></div>
 
-      <!-- Delta / Order Flow -->
       <div class="panel-hdr" style="margin-top:4px"><span class="label">ORDER FLOW</span></div>
       <div class="delta-bar-wrap">
         <span style="font-size:9px;color:var(--text-dim)">S</span>
@@ -83,112 +83,102 @@
       <div class="metric-row"><span class="label">Sell Absorb</span><span class="value" id="sell-absorb">—</span></div>
       <div class="metric-row"><span class="label">POC</span><span class="value" id="poc-val">—</span></div>
 
-      <!-- S/R Levels -->
       <div class="panel-hdr" style="margin-top:4px"><span class="label">S / R</span></div>
-      <div id="sr-list" style="max-height:200px;overflow-y:auto;"></div>
+      <div id="sr-list"></div>
 
-      <!-- Daily Risk -->
       <div class="panel-hdr" style="margin-top:4px"><span class="label">RISK</span></div>
-      <div class="metric-row"><span class="label">Daily P&amp;L</span><span class="value" id="daily-pnl">—</span></div>
+      <div class="metric-row"><span class="label">Daily P&L</span><span class="value" id="daily-pnl">—</span></div>
       <div class="metric-row"><span class="label">Trades Today</span><span class="value" id="trades-today">—</span></div>
       <div class="metric-row"><span class="label">Remaining</span><span class="value" id="trades-remain">—</span></div>
       <div class="metric-row"><span class="label">Status</span><span class="value" id="risk-status-v">—</span></div>
-    </aside>
 
-    <!-- Charts -->
-    <section id="chart-area">
-      <div id="candle-chart-wrap">
-        <div class="chart-label"><span id="candle-sym">BTCUSDT</span> · <span id="candle-ivl">5m</span></div>
-        <div id="candle-chart"></div>
-      </div>
-      <div id="delta-chart-wrap">
-        <div class="chart-label">DELTA <span id="delta-cd-val"></span></div>
-        <div id="delta-chart"></div>
-      </div>
-      <div id="vol-chart-wrap">
-        <div class="chart-label">VOLUME</div>
-        <div id="vol-chart"></div>
-      </div>
-    </section>
-
-    <!-- Right Panel -->
-    <aside id="right-panel">
-      <!-- Open Positions -->
-      <div class="panel-hdr"><span class="label">OPEN POSITIONS</span></div>
-      <div id="open-positions-list" style="flex:1;overflow-y:auto;"></div>
-
-      <!-- Signal Log -->
-      <div class="panel-hdr" style="margin-top:4px"><span class="label">SIGNAL LOG</span></div>
-      <div id="signal-log" style="max-height:220px;overflow-y:auto;"></div>
-
-      <!-- Stats Summary -->
-      <div class="panel-hdr" style="margin-top:4px"><span class="label">STATISTICS</span></div>
+      <div class="panel-hdr" style="margin-top:4px"><span class="label">STATS</span></div>
       <div class="metric-row"><span class="label">Total Trades</span><span class="value" id="stat-total">—</span></div>
       <div class="metric-row"><span class="label">Win Rate</span><span class="value" id="stat-wr">—</span></div>
-      <div class="metric-row"><span class="label">Total P&amp;L</span><span class="value" id="stat-pnl">—</span></div>
-      <div class="metric-row"><span class="label">Best</span><span class="value buy" id="stat-best">—</span></div>
-      <div class="metric-row"><span class="label">Worst</span><span class="value sell" id="stat-worst">—</span></div>
+      <div class="metric-row"><span class="label">Total P&L</span><span class="value" id="stat-pnl">—</span></div>
+      <div class="metric-row"><span class="label">Best</span><span class="value" id="stat-best">—</span></div>
+      <div class="metric-row"><span class="label">Worst</span><span class="value" id="stat-worst">—</span></div>
     </aside>
+
+    <!-- Chart area -->
+    <div id="chart-area">
+      <div id="chart-top-bar">
+        <span class="label" id="candle-sym">BTCUSDT</span>
+        <span class="label" id="candle-ivl" style="color:var(--text-dim)">5m</span>
+        <span id="loading-indicator" class="loading-spin" style="display:none">↻</span>
+      </div>
+      <div id="candle-chart"></div>
+      <div class="chart-label">DELTA / CUMULATIVE DELTA
+        <span id="delta-cd-val" style="color:var(--neutral);margin-left:8px"></span>
+      </div>
+      <div id="delta-chart"></div>
+      <div class="chart-label">VOLUME</div>
+      <div id="vol-chart"></div>
+    </div>
+
+    <!-- Right panel -->
+    <div id="right-panel">
+      <div class="panel-hdr"><span class="label">OPEN POSITIONS</span></div>
+      <div id="open-positions-list"></div>
+      <hr class="sep"/>
+      <div class="panel-hdr"><span class="label">SIGNAL LOG</span></div>
+      <div id="signal-log" style="overflow-y:auto;flex:1"></div>
+    </div>
   </div>
 
   <!-- ───── FOOTPRINT TAB ───── -->
   <div class="tab-panel" id="tab-footprint">
+    <div id="fp-header">
+      <span class="label">FOOTPRINT CHART ·</span>
+      <span class="label" id="fp-sym">BTCUSDT</span>
+    </div>
     <div id="fp-canvas-wrap">
-      <div class="chart-label">FOOTPRINT CHART — <span id="fp-sym">BTCUSDT</span></div>
       <canvas id="fp-canvas"></canvas>
     </div>
-    <aside id="fp-sidebar">
+    <div id="fp-detail">
       <div class="panel-hdr"><span class="label">CANDLE DETAIL</span></div>
-      <div id="fp-detail"></div>
+      <div class="metric-row"><span class="label">Delta</span><span class="value" id="fp-delta">—</span></div>
+      <div class="metric-row"><span class="label">Buy Vol</span><span class="value buy" id="fp-bvol">—</span></div>
+      <div class="metric-row"><span class="label">Sell Vol</span><span class="value sell" id="fp-svol">—</span></div>
+      <div class="metric-row"><span class="label">Stk Buy</span><span class="value" id="fp-stk-b">—</span></div>
+      <div class="metric-row"><span class="label">Stk Sell</span><span class="value" id="fp-stk-s">—</span></div>
+      <div class="metric-row"><span class="label">Buy Absorb</span><span class="value" id="fp-ba">—</span></div>
+      <div class="metric-row"><span class="label">Sell Absorb</span><span class="value" id="fp-sa">—</span></div>
+      <div class="metric-row"><span class="label">Exhaustion</span><span class="value" id="fp-exh">—</span></div>
+      <div class="metric-row"><span class="label">POC</span><span class="value" id="fp-poc">—</span></div>
+      <div class="metric-row"><span class="label">VAH</span><span class="value" id="fp-vah">—</span></div>
+      <div class="metric-row"><span class="label">VAL</span><span class="value" id="fp-val">—</span></div>
       <hr class="sep"/>
       <div class="panel-hdr"><span class="label">LEVEL BREAKDOWN</span></div>
-      <div id="fp-levels"></div>
-    </aside>
+      <div id="fp-levels" style="overflow-y:auto;font-size:10px;flex:1"></div>
+    </div>
   </div>
 
   <!-- ───── SCANNER TAB ───── -->
   <div class="tab-panel" id="tab-scanner">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-      <span style="color:var(--glow);letter-spacing:2px;font-size:11px;text-transform:uppercase">HOT COINS SCANNER</span>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span style="font-size:11px;color:var(--text-dim)" id="scan-time"></span>
-        <button class="btn-sm" id="scan-btn">⚡ SCAN</button>
-      </div>
+    <div id="scanner-header">
+      <span class="label">HOT COINS</span>
+      <span id="scan-time" style="color:var(--text-dim);font-size:11px"></span>
+      <button class="btn-sm" id="scan-btn">⚡ SCAN</button>
     </div>
     <div id="scanner-grid"></div>
   </div>
 
   <!-- ───── POSITIONS TAB ───── -->
   <div class="tab-panel" id="tab-positions">
-    <div id="stats-bar">
-      <div class="stat-box">
-        <div class="s-label">Total Trades</div>
-        <div class="s-val" id="sb-total">—</div>
-      </div>
-      <div class="stat-box">
-        <div class="s-label">Win Rate</div>
-        <div class="s-val green" id="sb-wr">—</div>
-      </div>
-      <div class="stat-box">
-        <div class="s-label">Total P&L</div>
-        <div class="s-val" id="sb-pnl">—</div>
-      </div>
-      <div class="stat-box">
-        <div class="s-label">Profit Factor</div>
-        <div class="s-val green" id="sb-pf">—</div>
-      </div>
-      <div class="stat-box">
-        <div class="s-label">Avg Duration</div>
-        <div class="s-val" id="sb-dur">—</div>
+    <div id="positions-header">
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div class="stat-box"><div class="s-label">Total Trades</div><div class="s-val" id="sb-total">—</div></div>
+        <div class="stat-box"><div class="s-label">Win Rate</div><div class="s-val" id="sb-wr">—</div></div>
+        <div class="stat-box"><div class="s-label">Total P&L</div><div class="s-val" id="sb-pnl">—</div></div>
       </div>
     </div>
-    <div class="trade-table-wrap">
+    <div id="trades-wrap">
       <table>
         <thead>
           <tr>
-            <th>ID</th><th>Symbol</th><th>Dir</th><th>Entry</th>
-            <th>Exit</th><th>SL</th><th>TP</th><th>P&L</th>
-            <th>Reason</th><th>Duration</th><th>Status</th>
+            <th>ID</th><th>Symbol</th><th>Dir</th><th>Entry</th><th>Exit</th>
+            <th>SL</th><th>TP</th><th>P&L</th><th>Reason</th><th>Duration</th><th>Status</th>
           </tr>
         </thead>
         <tbody id="trades-tbody"></tbody>
@@ -198,32 +188,30 @@
 
   <!-- ───── BACKTEST TAB ───── -->
   <div class="tab-panel" id="tab-backtest">
-    <!-- Controls -->
-    <div id="bt-controls">
-      <div style="color:var(--glow);letter-spacing:2px;font-size:11px;text-transform:uppercase;margin-bottom:4px">
-        BACKTEST CONFIG
+    <div id="bt-config">
+      <div class="panel-hdr"><span class="label">BACKTEST CONFIG</span></div>
+      <div class="metric-row">
+        <span class="label">Symbol</span>
+        <select id="bt-symbol" style="width:120px"></select>
       </div>
-      <div class="bt-input-group">
-        <label>SYMBOL</label>
-        <select id="bt-symbol"></select>
-      </div>
-      <div class="bt-input-group">
-        <label>INTERVAL</label>
+      <div class="metric-row">
+        <span class="label">Interval</span>
         <select id="bt-interval">
-          <option>5m</option><option>15m</option><option>1h</option><option>4h</option><option>1d</option>
+          <option>1m</option><option>3m</option><option selected>5m</option>
+          <option>15m</option><option>1h</option><option>4h</option>
         </select>
       </div>
-      <div class="bt-input-group">
-        <label>INITIAL BALANCE ($)</label>
-        <input type="number" id="bt-balance" value="10000" step="1000"/>
+      <div class="metric-row">
+        <span class="label">Balance $</span>
+        <input type="number" id="bt-balance" value="10000" min="100"/>
       </div>
-      <div class="bt-input-group">
-        <label>COMMISSION (%)</label>
-        <input type="number" id="bt-commission" value="0.1" step="0.01"/>
+      <div class="metric-row">
+        <span class="label">Commission %</span>
+        <input type="number" id="bt-commission" value="0.1" step="0.01" min="0"/>
       </div>
-      <div class="bt-input-group">
-        <label>SLIPPAGE (%)</label>
-        <input type="number" id="bt-slippage" value="0.05" step="0.01"/>
+      <div class="metric-row">
+        <span class="label">Slippage %</span>
+        <input type="number" id="bt-slippage" value="0.05" step="0.01" min="0"/>
       </div>
       <hr class="sep"/>
       <button id="bt-run-btn">▶ RUN BACKTEST</button>
@@ -232,8 +220,6 @@
         <div id="bt-status"></div>
       </div>
     </div>
-
-    <!-- Main BT area -->
     <div id="bt-main">
       <div id="bt-equity-wrap">
         <div class="chart-label">EQUITY CURVE</div>
@@ -241,8 +227,6 @@
       </div>
       <div id="bt-log"></div>
     </div>
-
-    <!-- Results panel -->
     <div id="bt-results">
       <div class="panel-hdr"><span class="label">RESULTS</span></div>
       <div class="metric-row"><span class="label">Total Trades</span><span class="value" id="btr-total">—</span></div>
@@ -266,6 +250,138 @@
           <tbody id="bt-trades-tbody"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- ───── SETTINGS TAB ───── -->
+  <div class="tab-panel" id="tab-settings">
+    <div id="settings-layout">
+
+      <!-- API Keys -->
+      <div class="settings-card">
+        <div class="settings-card-hdr">
+          <span>🔑 EXCHANGE API KEYS</span>
+          <span class="key-badge" id="key-badge">NOT CONFIGURED</span>
+        </div>
+        <div class="settings-card-body">
+          <div class="setting-row">
+            <label>API Key</label>
+            <input type="password" id="inp-api-key" placeholder="Binance API Key" autocomplete="off" spellcheck="false"/>
+            <button class="btn-icon" id="toggle-key-vis" title="Show/Hide">👁</button>
+          </div>
+          <div class="setting-row">
+            <label>API Secret</label>
+            <input type="password" id="inp-api-secret" placeholder="Binance API Secret" autocomplete="off" spellcheck="false"/>
+            <button class="btn-icon" id="toggle-secret-vis" title="Show/Hide">👁</button>
+          </div>
+          <div class="setting-row">
+            <label>Exchange</label>
+            <select id="inp-exchange-type">
+              <option value="spot">Spot</option>
+              <option value="futures">USD-M Futures</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn-primary" id="btn-save-keys">✓ SAVE KEYS</button>
+            <button class="btn-warn" id="btn-clear-keys">✕ CLEAR</button>
+          </div>
+          <div class="settings-feedback" id="keys-feedback"></div>
+        </div>
+      </div>
+
+      <!-- Trading Mode -->
+      <div class="settings-card">
+        <div class="settings-card-hdr">
+          <span>⚡ TRADING MODE</span>
+          <span class="mode-badge-lg" id="mode-badge-lg">SIGNAL ONLY</span>
+        </div>
+        <div class="settings-card-body">
+          <div class="mode-toggle-wrap">
+            <div class="mode-option" id="mode-signal" onclick="setTradingMode('signal_only')">
+              <div class="mode-icon">📊</div>
+              <div class="mode-title">Signal Only</div>
+              <div class="mode-desc">Show alerts. No orders placed.</div>
+            </div>
+            <div class="mode-option" id="mode-live" onclick="setTradingMode('live')">
+              <div class="mode-icon">⚡</div>
+              <div class="mode-title">Live Trading</div>
+              <div class="mode-desc">Place real orders via API.</div>
+            </div>
+          </div>
+          <div class="warning-box" id="live-warning" style="display:none">
+            ⚠ Live mode places real orders using your Binance API key. Ensure keys have trading permissions and risk limits are set correctly.
+          </div>
+          <div style="margin-top:12px">
+            <label class="setting-label">Order Type</label>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <button class="btn-toggle" id="ot-market" onclick="setOrderType('MARKET')">MARKET</button>
+              <button class="btn-toggle" id="ot-limit" onclick="setOrderType('LIMIT')">LIMIT</button>
+            </div>
+          </div>
+          <div style="margin-top:10px">
+            <label class="setting-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="inp-auto-sl-tp" checked/>
+              Auto set SL / TP on entry
+            </label>
+          </div>
+          <button class="btn-primary" id="btn-save-mode" style="margin-top:12px">✓ SAVE MODE</button>
+          <div class="settings-feedback" id="mode-feedback"></div>
+        </div>
+      </div>
+
+      <!-- Risk Parameters -->
+      <div class="settings-card">
+        <div class="settings-card-hdr"><span>🛡 RISK PARAMETERS</span></div>
+        <div class="settings-card-body">
+          <div class="setting-row">
+            <label>Risk per Trade %</label>
+            <input type="number" id="inp-risk-pct" value="1.0" min="0.1" max="10" step="0.1"/>
+          </div>
+          <div class="setting-row">
+            <label>TP Ratio (R:R)</label>
+            <input type="number" id="inp-tp-ratio" value="2.0" min="0.5" max="10" step="0.1"/>
+          </div>
+          <div class="setting-row">
+            <label>Max Daily Loss %</label>
+            <input type="number" id="inp-max-loss" value="3.0" min="0.5" max="20" step="0.5"/>
+          </div>
+          <div class="setting-row">
+            <label>Max Trades / Day</label>
+            <input type="number" id="inp-max-trades" value="5" min="1" max="50" step="1"/>
+          </div>
+          <button class="btn-primary" id="btn-save-risk" style="margin-top:12px">✓ SAVE RISK</button>
+          <div class="settings-feedback" id="risk-feedback"></div>
+        </div>
+      </div>
+
+      <!-- Signal Parameters -->
+      <div class="settings-card">
+        <div class="settings-card-hdr"><span>📡 SIGNAL PARAMETERS</span></div>
+        <div class="settings-card-body">
+          <div class="setting-row">
+            <label>Delta Threshold $</label>
+            <input type="number" id="inp-delta-thresh" value="500" min="0" step="50"/>
+          </div>
+          <div class="setting-row">
+            <label>Min Stacked Imbalances</label>
+            <input type="number" id="inp-min-stacked" value="3" min="1" max="10" step="1"/>
+          </div>
+          <div style="margin-top:10px">
+            <label class="setting-label">Active Sessions</label>
+            <div style="display:flex;gap:10px;margin-top:6px">
+              <label class="setting-label" style="display:flex;align-items:center;gap:5px;cursor:pointer">
+                <input type="checkbox" id="sess-london" checked/> London (07–16 UTC)
+              </label>
+              <label class="setting-label" style="display:flex;align-items:center;gap:5px;cursor:pointer">
+                <input type="checkbox" id="sess-newyork" checked/> New York (13–22 UTC)
+              </label>
+            </div>
+          </div>
+          <button class="btn-primary" id="btn-save-signal" style="margin-top:12px">✓ SAVE SIGNAL</button>
+          <div class="settings-feedback" id="signal-feedback"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 

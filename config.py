@@ -36,9 +36,21 @@ FUTURES_ENDPOINTS = [
 # WebSocket stream base
 WS_STREAM_BASE = "wss://stream.binance.com:9443/stream"
 
-# ─────────────────────────── Credentials (optional) ──────────────────────────
+# ─────────────────────────── Credentials ─────────────────────────────────────
+# Loaded from env or keys.json at runtime (see server.py load_keys())
 BINANCE_API_KEY    = os.environ.get("BINANCE_API_KEY",    "")
 BINANCE_API_SECRET = os.environ.get("BINANCE_API_SECRET", "")
+KEYS_FILE          = os.path.join(os.path.dirname(__file__), "keys.json")
+
+# ─────────────────────────── Trading Mode ────────────────────────────────────
+# "signal_only" — show signals only, never place orders
+# "live"        — place real orders via Binance API (requires API keys)
+TRADING_MODE       = os.environ.get("TRADING_MODE", "signal_only")
+
+# Order placement options (only active when TRADING_MODE == "live")
+ORDER_TYPE         = "MARKET"   # MARKET | LIMIT
+AUTO_SL_TP         = True       # automatically set SL/TP on entry
+USE_REDUCE_ONLY    = True       # close orders use reduceOnly (futures)
 
 # ─────────────────────────── Trend Filter ────────────────────────────────────
 EMA_FAST_PERIOD = 20          # EMA20 — short-term trend
@@ -110,4 +122,4 @@ MAX_SIGNAL_HISTORY = 500
 MAX_LOG_ENTRIES    = 1000
 
 # ─────────────────────────── Dashboard ───────────────────────────────────────
-REFRESH_SECONDS   = 10         # polling fallback if WS drops
+REFRESH_SECONDS   = 10         # background analysis loop interval
