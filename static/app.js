@@ -111,6 +111,9 @@ function updateCharts(state) {
   candleSeries.setData(candles.map(c => ({
     time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
   })));
+  // Force price (Y) auto-scale after every data load — critical when switching
+  // between assets with very different price ranges (e.g. BTC → UTK).
+  candleChart.priceScale('right').applyOptions({ autoScale: true });
   candleChart.timeScale().fitContent();
 
   if (state.ema) {
@@ -786,6 +789,12 @@ function subscribe() {
   try { cdSeries.setData([]);      } catch(e) {}
   srLines.forEach(l => { try { candleSeries.removePriceLine(l); } catch(e){} });
   srLines = [];
+  // Re-enable auto-scaling on the price (Y) axis so the new symbol's price
+  // range is used — without this, LightweightCharts keeps the old scale even
+  // after setData([]) and the new candles render invisible below/above the view.
+  try { candleChart.priceScale('right').applyOptions({ autoScale: true }); } catch(e) {}
+  try { deltaChart.priceScale('right').applyOptions({ autoScale: true }); }  catch(e) {}
+  try { volChart.priceScale('right').applyOptions({ autoScale: true }); }    catch(e) {}
 
   S.ws.send(JSON.stringify({
     type:     'subscribe',
